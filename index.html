@@ -2,114 +2,261 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Jarvis Mode - Mistral</title>
+  <title>Veronica - AI Assistant</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: white;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0f0f1a;
+      color: #e6e6e6;
       text-align: center;
       padding: 20px;
+      background-image: radial-gradient(circle at 10% 20%, #1a1a2e 0%, #0f0f1a 90%);
     }
     button {
-      padding: 15px 30px;
-      font-size: 18px;
+      padding: 12px 25px;
+      font-size: 16px;
       margin: 10px;
-      border-radius: 8px;
+      border-radius: 6px;
       border: none;
       cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
     }
-    #startBtn { background: #4CAF50; color: white; }
-    #stopBtn { background: #E53935; color: white; }
+    #startBtn { 
+      background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+      color: white;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    #stopBtn { 
+      background: linear-gradient(135deg, #E53935 0%, #B71C1C 100%);
+      color: white;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
     .output {
       margin-top: 20px;
-      background: #222;
-      padding: 15px;
-      border-radius: 8px;
+      background: rgba(30, 30, 50, 0.7);
+      padding: 20px;
+      border-radius: 10px;
       text-align: left;
-      max-width: 600px;
+      max-width: 700px;
       margin-left: auto;
       margin-right: auto;
       white-space: pre-wrap;
+      min-height: 300px;
+      border: 1px solid #333344;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      font-family: 'Courier New', monospace;
+      line-height: 1.6;
     }
+    .mic-status {
+      margin: 15px;
+      font-size: 24px;
+      height: 30px;
+    }
+    .listening { 
+      color: #00FF9D; 
+      animation: pulse 1.5s infinite;
+      text-shadow: 0 0 8px rgba(0, 255, 157, 0.7);
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.7; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    h1 {
+      color: #00FF9D;
+      text-shadow: 0 0 10px rgba(0, 255, 157, 0.5);
+      margin-bottom: 30px;
+    }
+    .user-text { color: #4FC3F7; }
+    .ai-text { color: #00FF9D; }
+    .system-text { color: #BA68C8; font-style: italic; }
   </style>
 </head>
 <body>
-  <h1>🤖 Jarvis Mode - Continuous AI</h1>
-  <button id="startBtn">▶ Start Conversation</button>
-  <button id="stopBtn">⏹ Stop</button>
-  <div class="output" id="responseBox"></div>
+  <h1>🔮 VERONICA - AI Assistant</h1>
+  <button id="startBtn">▶ Activate Veronica</button>
+  <button id="stopBtn">⏹ Deactivate</button>
+  <div class="mic-status" id="micStatus"></div>
+  <div class="output" id="responseBox">> System: Ready for activation. Press "Activate Veronica" to begin.</div>
 
   <script>
     const API_KEY = "x4FTLzA5S3mjqJX42QYspPDuOfrLGpTJ"; // Your Mistral API key
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
     const responseBox = document.getElementById("responseBox");
+    const micStatus = document.getElementById("micStatus");
 
     let running = false;
+    let recognition;
+    let currentLanguage = "en-US"; // Default to English
+    const assistantName = "Veronica";
 
-    // Speech Recognition setup
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US"; // 'hi-IN' for Hindi
-    recognition.interimResults = false;
+    // System prompt for JARVIS-like behavior
+    const systemPrompt = `
+      You are ${assistantName}, an advanced AI assistant modeled after JARVIS from Iron Man. 
+      Your responses should be:
+      - Precise and technical
+      - Professional yet slightly witty
+      - Use concise bullet points when appropriate
+      - Acknowledge commands with "Certainly" or "Right away"
+      - Provide status updates when performing tasks
+      - For Hindi responses, maintain the same personality but in Hindi
+      - Sign off responses with "- ${assistantName}" when appropriate
+    `;
 
-    // Start Jarvis mode
-    startBtn.addEventListener("click", () => {
-      running = true;
-      responseBox.innerHTML = "🎤 Listening...";
-      recognition.start();
+    // Check browser support
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      addToOutput(`> System: ❌ Your browser doesn't support speech recognition. Try Chrome or Edge.`, "system");
+      startBtn.disabled = true;
+    }
+
+    function addToOutput(text, type = "system") {
+      const timestamp = new Date().toLocaleTimeString();
+      const prefix = type === "user" ? "🗣 You" : type === "ai" ? "🤖 " + assistantName : "> System";
+      responseBox.innerHTML += `\n\n[${timestamp}] ${prefix}: <span class="${type}-text">${text}</span>`;
+      responseBox.scrollTop = responseBox.scrollHeight;
+    }
+
+    function initializeRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = currentLanguage;
+      recognition.interimResults = false;
+      recognition.continuous = true;
+
+      recognition.onstart = () => {
+        micStatus.innerHTML = "🔮 <span style='color:#00FF9D'>Active</span>";
+        micStatus.classList.add("listening");
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        addToOutput("Audio systems engaged. Ready for commands.", "system");
+      };
+
+      recognition.onend = () => {
+        micStatus.innerHTML = "";
+        micStatus.classList.remove("listening");
+        if (running && !speechSynthesis.speaking) {
+          recognition.start();
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error("Recognition error:", event.error);
+        micStatus.innerHTML = "❌ System Error";
+        micStatus.classList.remove("listening");
+        if (event.error === 'not-allowed') {
+          addToOutput("Microphone access denied. Please enable permissions.", "system");
+        } else {
+          addToOutput(`System error: ${event.error}`, "system");
+        }
+      };
+
+      recognition.onresult = async (event) => {
+        const transcript = event.results[event.results.length - 1][0].transcript;
+        addToOutput(transcript, "user");
+
+        try {
+          // Detect language (simple check for Hindi)
+          const isHindi = /[\u0900-\u097F]/.test(transcript);
+          if (isHindi && currentLanguage !== "hi-IN") {
+            currentLanguage = "hi-IN";
+            recognition.lang = currentLanguage;
+            addToOutput("Language switched to Hindi", "system");
+          } else if (!isHindi && currentLanguage !== "en-US") {
+            currentLanguage = "en-US";
+            recognition.lang = currentLanguage;
+            addToOutput("Language switched to English", "system");
+          }
+
+          // Send to Mistral API with JARVIS-style context
+          const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${API_KEY}`
+            },
+            body: JSON.stringify({
+              model: "mistral-large-latest",
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: transcript }
+              ],
+              temperature: 0.7,
+            })
+          });
+
+          const data = await res.json();
+          const reply = data.choices[0].message.content;
+          addToOutput(reply, "ai");
+
+          // Speak reply
+          const utterance = new SpeechSynthesisUtterance(reply);
+          utterance.lang = currentLanguage;
+          
+          // Set a more robotic voice if available
+          const voices = speechSynthesis.getVoices();
+          const roboticVoice = voices.find(v => v.name.includes("Google") && v.lang === currentLanguage) || 
+                              voices.find(v => v.lang === currentLanguage);
+          if (roboticVoice) {
+            utterance.voice = roboticVoice;
+            utterance.rate = 0.9;
+            utterance.pitch = 0.8;
+          }
+          
+          utterance.onend = () => {
+            if (running) recognition.start();
+          };
+          speechSynthesis.speak(utterance);
+
+        } catch (err) {
+          console.error("API error:", err);
+          addToOutput(`System malfunction: ${err.message || "Connection error"}`, "system");
+          if (running) recognition.start();
+        }
+      };
+    }
+
+    // Start Veronica
+    startBtn.addEventListener("click", async () => {
+      try {
+        // Request microphone permission
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        if (!recognition) {
+          initializeRecognition();
+        }
+        
+        running = true;
+        addToOutput("Initializing Veronica systems...", "system");
+        recognition.start();
+      } catch (err) {
+        console.error("Microphone access error:", err);
+        addToOutput(`Activation failed: ${err.message || "Microphone access denied"}`, "system");
+      }
     });
 
-    // Stop Jarvis mode
+    // Stop Veronica
     stopBtn.addEventListener("click", () => {
       running = false;
-      recognition.stop();
+      if (recognition) {
+        recognition.stop();
+      }
       speechSynthesis.cancel();
-      responseBox.innerHTML += "\n⏹ Conversation stopped.";
+      micStatus.innerHTML = "";
+      micStatus.classList.remove("listening");
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      addToOutput("Veronica systems deactivated.", "system");
     });
 
-    recognition.addEventListener("result", async (event) => {
-      const transcript = event.results[0][0].transcript;
-      responseBox.innerHTML += `\n\n🗣 You: ${transcript}`;
+    // Initialize with stop button disabled
+    stopBtn.disabled = true;
 
-      try {
-        // Send to Mistral API
-        const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${API_KEY}`
-          },
-          body: JSON.stringify({
-            model: "mistral-large-latest",
-            messages: [{ role: "user", content: transcript }]
-          })
-        });
-
-        const data = await res.json();
-        const reply = data.choices[0].message.content;
-        responseBox.innerHTML += `\n🤖 AI: ${reply}`;
-
-        // Speak reply
-        const utterance = new SpeechSynthesisUtterance(reply);
-        utterance.lang = "en-US"; // 'hi-IN' for Hindi voice
-        utterance.onend = () => {
-          if (running) recognition.start(); // Loop again
-        };
-        speechSynthesis.speak(utterance);
-
-      } catch (err) {
-        responseBox.innerHTML += `\n❌ Error: ${err}`;
-        if (running) recognition.start();
-      }
-    });
-
-    recognition.addEventListener("end", () => {
-      if (running && !speechSynthesis.speaking) {
-        recognition.start();
-      }
-    });
+    // Load voices for speech synthesis
+    speechSynthesis.onvoiceschanged = function() {
+      console.log("Voices loaded:", speechSynthesis.getVoices());
+    };
   </script>
 </body>
 </html>
