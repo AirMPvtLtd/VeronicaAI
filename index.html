@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Jarvis Mode - Mistral</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    button {
+      padding: 15px 30px;
+      font-size: 18px;
+      margin: 10px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+    }
+    #startBtn { background: #4CAF50; color: white; }
+    #stopBtn { background: #E53935; color: white; }
+    .output {
+      margin-top: 20px;
+      background: #222;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: left;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>🤖 Jarvis Mode - Continuous AI</h1>
+  <button id="startBtn">▶ Start Conversation</button>
+  <button id="stopBtn">⏹ Stop</button>
+  <div class="output" id="responseBox"></div>
+
+  <script>
+    const API_KEY = "x4FTLzA5S3mjqJX42QYspPDuOfrLGpTJ"; // Your Mistral API key
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const responseBox = document.getElementById("responseBox");
+
+    let running = false;
+
+    // Speech Recognition setup
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US"; // 'hi-IN' for Hindi
+    recognition.interimResults = false;
+
+    // Start Jarvis mode
+    startBtn.addEventListener("click", () => {
+      running = true;
+      responseBox.innerHTML = "🎤 Listening...";
+      recognition.start();
+    });
+
+    // Stop Jarvis mode
+    stopBtn.addEventListener("click", () => {
+      running = false;
+      recognition.stop();
+      speechSynthesis.cancel();
+      responseBox.innerHTML += "\n⏹ Conversation stopped.";
+    });
+
+    recognition.addEventListener("result", async (event) => {
+      const transcript = event.results[0][0].transcript;
+      responseBox.innerHTML += `\n\n🗣 You: ${transcript}`;
+
+      try {
+        // Send to Mistral API
+        const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({
+            model: "mistral-large-latest",
+            messages: [{ role: "user", content: transcript }]
+          })
+        });
+
+        const data = await res.json();
+        const reply = data.choices[0].message.content;
+        responseBox.innerHTML += `\n🤖 AI: ${reply}`;
+
+        // Speak reply
+        const utterance = new SpeechSynthesisUtterance(reply);
+        utterance.lang = "en-US"; // 'hi-IN' for Hindi voice
+        utterance.onend = () => {
+          if (running) recognition.start(); // Loop again
+        };
+        speechSynthesis.speak(utterance);
+
+      } catch (err) {
+        responseBox.innerHTML += `\n❌ Error: ${err}`;
+        if (running) recognition.start();
+      }
+    });
+
+    recognition.addEventListener("end", () => {
+      if (running && !speechSynthesis.speaking) {
+        recognition.start();
+      }
+    });
+  </script>
+</body>
+</html>
