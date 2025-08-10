@@ -2,8 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>VERONICA - AI Assistant</title>
-  <!-- Add the libraries -->
+  <title>RINKU SIR - AI Assistant</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/annyang/2.6.1/annyang.min.js"></script>
   <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
   <style>
@@ -51,8 +50,14 @@
       font-family: 'Courier New', monospace;
       line-height: 1.6;
     }
-    .status-indicator {
+    .status-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
       margin: 15px;
+      gap: 10px;
+    }
+    .status-indicator {
       font-size: 24px;
       height: 30px;
     }
@@ -60,6 +65,16 @@
       color: #00FF9D; 
       animation: pulse 1.5s infinite;
       text-shadow: 0 0 8px rgba(0, 255, 157, 0.7);
+    }
+    .noise-indicator {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #333;
+    }
+    .noise-active {
+      background: #00FF9D;
+      box-shadow: 0 0 10px #00FF9D;
     }
     @keyframes pulse {
       0% { transform: scale(1); opacity: 1; }
@@ -85,47 +100,51 @@
   </style>
 </head>
 <body>
-  <h1>🔮 VERONICA - AI Assistant</h1>
+  <h1>🔮 RINKU SIR - AI Assistant</h1>
   <select class="language-selector" id="languageSelector">
     <option value="en-US">English</option>
     <option value="hi-IN">हिंदी</option>
   </select><br>
   <button id="startBtn">▶ Activate</button>
   <button id="stopBtn">⏹ Deactivate</button>
-  <div class="status-indicator" id="statusIndicator"></div>
+  <div class="status-container">
+    <div class="status-indicator" id="statusIndicator"></div>
+    <div class="noise-indicator" id="noiseIndicator"></div>
+  </div>
   <div class="output" id="responseBox">> System: Ready for activation</div>
 
   <script>
-    const API_KEY = "x4FTLzA5S3mjqJX42QYspPDuOfrLGpTJ"; // Your Mistral API key
+    const API_KEY = "x4FTLzA5S3mjqJX42QYspPDuOfrLGpTJ";
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
     const responseBox = document.getElementById("responseBox");
     const statusIndicator = document.getElementById("statusIndicator");
+    const noiseIndicator = document.getElementById("noiseIndicator");
     const languageSelector = document.getElementById("languageSelector");
 
     let running = false;
     let currentLanguage = "en-US";
-    const assistantName = "Veronica";
+    const assistantName = "Rinku Sir";
+    let isSpeaking = false;
+    let audioStream;
+    let silenceTimer;
+    let voiceActivityTimer;
 
-    // System prompt for JARVIS-like behavior with Hindi support
+    // System prompts
     const systemPrompt = {
-      "en-US": `You are ${assistantName}, an advanced AI assistant modeled after JARVIS from Iron Man. 
-      Your responses should be:
-      - Precise and technical
-      - Professional yet slightly witty
-      - Use concise bullet points when appropriate
-      - Acknowledge commands with "Certainly" or "Right away"
-      - Provide status updates when performing tasks
-      - Sign off responses with "- ${assistantName}" when appropriate`,
+      "en-US": `You are ${assistantName}, a highly intelligent AI assistant. Respond with:
+      - Natural human-like responses
+      - Only speak words (never read symbols or markup)
+      - Use casual but respectful tone
+      - Address the user as "Sir" when appropriate
+      - Never read your own name or special characters`,
       
-      "hi-IN": `आप ${assistantName} हैं, एक उन्नत AI सहायक जो आयरन मैन के JARVIS की तरह काम करता है।
-      आपकी प्रतिक्रियाएँ होनी चाहिए:
-      - सटीक और तकनीकी
-      - पेशेवर पर थोड़ा मजाकिया
-      - उचित होने पर संक्षिप्त बुलेट पॉइंट्स का उपयोग करें
-      - आदेशों को "जरूर" या "तुरंत" से स्वीकार करें
-      - कार्यों की स्थिति अपडेट प्रदान करें
-      - उचित होने पर प्रतिक्रियाओं को "- ${assistantName}" से समाप्त करें`
+      "hi-IN": `आप ${assistantName} हैं, एक अत्यधिक बुद्धिमान AI सहायक। प्रतिक्रियाएँ दें:
+      - स्वाभाविक मानव जैसी प्रतिक्रियाएँ
+      - केवल शब्द बोलें (कभी भी प्रतीक या मार्कअप न पढ़ें)
+      - आकस्मिक लेकिन सम्मानजनक स्वर का उपयोग करें
+      - उपयुक्त होने पर उपयोगकर्ता को "सर" कहकर संबोधित करें
+      - कभी भी अपना नाम या विशेष वर्ण न पढ़ें`
     };
 
     function addToOutput(text, type = "system") {
@@ -135,30 +154,50 @@
       responseBox.scrollTop = responseBox.scrollHeight;
     }
 
+    function cleanResponse(text) {
+      // Remove any symbols or markup that might be read aloud
+      return text.replace(/[\[\]\(\)\{\}\<\>\*\-\+\=\_\&\^\%\$\#\@\!]/g, ' ')
+                 .replace(/\s+/g, ' ')
+                 .trim();
+    }
+
     function speakText(text, lang) {
+      isSpeaking = true;
+      const cleanedText = cleanResponse(text);
+      
       if (lang === "hi-IN") {
-        // Use responsivevoice for better Hindi pronunciation
-        responsiveVoice.speak(text, "Hindi Female", {
-          rate: 0.9,
-          pitch: 0.8,
+        responsiveVoice.speak(cleanedText, "Hindi Male", {
+          rate: 0.95,
+          pitch: 1.0,
+          onstart: () => {
+            stopVoiceRecognition();
+          },
           onend: () => {
-            if (running) startListening();
+            isSpeaking = false;
+            if (running) {
+              setTimeout(startVoiceRecognition, 500);
+            }
           }
         });
       } else {
-        // Use responsivevoice for English
-        responsiveVoice.speak(text, "UK English Male", {
-          rate: 0.9,
-          pitch: 0.8,
+        responsiveVoice.speak(cleanedText, "US English Male", {
+          rate: 0.95,
+          pitch: 1.0,
+          onstart: () => {
+            stopVoiceRecognition();
+          },
           onend: () => {
-            if (running) startListening();
+            isSpeaking = false;
+            if (running) {
+              setTimeout(startVoiceRecognition, 500);
+            }
           }
         });
       }
     }
 
-    function startListening() {
-      if (!running) return;
+    function startVoiceRecognition() {
+      if (!running || isSpeaking) return;
       
       statusIndicator.innerHTML = "🔮 <span style='color:#00FF9D'>Listening...</span>";
       statusIndicator.classList.add("active");
@@ -166,53 +205,67 @@
       if (annyang) {
         annyang.abort();
         annyang.start({ autoRestart: false });
+        monitorVoiceActivity();
       }
     }
 
-    function stopListening() {
+    function stopVoiceRecognition() {
       statusIndicator.innerHTML = "";
       statusIndicator.classList.remove("active");
+      noiseIndicator.classList.remove("noise-active");
       if (annyang) {
         annyang.abort();
       }
+      if (silenceTimer) clearTimeout(silenceTimer);
+      if (voiceActivityTimer) clearTimeout(voiceActivityTimer);
+    }
+
+    function monitorVoiceActivity() {
+      // Simulate voice activity detection
+      noiseIndicator.classList.remove("noise-active");
+      
+      voiceActivityTimer = setTimeout(() => {
+        if (running && !isSpeaking) {
+          noiseIndicator.classList.add("noise-active");
+          setTimeout(() => {
+            noiseIndicator.classList.remove("noise-active");
+          }, 1000);
+        }
+      }, 1500);
     }
 
     function initializeSpeechRecognition() {
       if (!annyang) {
-        addToOutput("Speech recognition not supported in this browser", "system");
+        addToOutput("Advanced speech recognition unavailable", "system");
         return;
       }
 
-      // Set language
       currentLanguage = languageSelector.value;
       
-      // Commands for annyang (simple fallback)
       annyang.addCommands({
         '*text': function(text) {
+          if (isSpeaking) return; // Ignore if assistant is speaking
           processUserInput(text);
         }
       });
 
-      annyang.addCallback('result', function(phrases) {
-        console.log("Heard:", phrases);
-      });
-
       annyang.addCallback('error', function(err) {
         console.error("Speech error:", err);
-        addToOutput(`Speech recognition error: ${err}`, "system");
-        if (running) setTimeout(startListening, 1000);
+        if (running && !isSpeaking) {
+          setTimeout(startVoiceRecognition, 1000);
+        }
       });
 
       annyang.addCallback('end', function() {
-        if (running && !responsiveVoice.isPlaying()) {
-          setTimeout(startListening, 500);
+        if (running && !isSpeaking) {
+          setTimeout(startVoiceRecognition, 500);
         }
       });
     }
 
     async function processUserInput(text) {
       addToOutput(text, "user");
-      stopListening();
+      stopVoiceRecognition();
 
       try {
         const response = await getAIResponse(text);
@@ -221,7 +274,9 @@
       } catch (err) {
         console.error("API error:", err);
         addToOutput(`System error: ${err.message}`, "system");
-        if (running) startListening();
+        if (running && !isSpeaking) {
+          startVoiceRecognition();
+        }
       }
     }
 
@@ -246,56 +301,61 @@
       return data.choices[0].message.content;
     }
 
-    // Start Veronica
+    // Start Assistant
     startBtn.addEventListener("click", async () => {
       try {
-        // Request microphone permission
-        await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         
         running = true;
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        addToOutput("Initializing Veronica systems...", "system");
+        addToOutput("Systems activated. How may I assist you today?", "system");
         
         initializeSpeechRecognition();
-        startListening();
+        startVoiceRecognition();
         
-        // Initialize responsivevoice
-        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Female" : "UK English Male");
+        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "US English Male");
         
       } catch (err) {
-        console.error("Microphone error:", err);
-        addToOutput(`Activation failed: ${err.message || "Microphone access denied"}`, "system");
+        console.error("Activation error:", err);
+        addToOutput(`Activation failed: ${err.message}`, "system");
       }
     });
 
-    // Stop Veronica
+    // Stop Assistant
     stopBtn.addEventListener("click", () => {
       running = false;
-      stopListening();
+      isSpeaking = false;
+      stopVoiceRecognition();
       responsiveVoice.cancel();
       startBtn.disabled = false;
       stopBtn.disabled = true;
-      addToOutput("Veronica systems deactivated.", "system");
+      addToOutput("Systems deactivated", "system");
+      
+      if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+      }
     });
 
     // Language change handler
     languageSelector.addEventListener("change", () => {
       if (running) {
-        addToOutput(`Language changed to ${languageSelector.value === "hi-IN" ? "Hindi" : "English"}`, "system");
-        stopListening();
+        addToOutput(`Language set to ${languageSelector.value === "hi-IN" ? "Hindi" : "English"}`, "system");
+        stopVoiceRecognition();
         currentLanguage = languageSelector.value;
-        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Female" : "UK English Male");
-        startListening();
+        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "US English Male");
+        if (!isSpeaking) {
+          startVoiceRecognition();
+        }
       }
     });
 
-    // Initialize with stop button disabled
+    // Initialize
     stopBtn.disabled = true;
 
-    // Check for annyang support
+    // Check for support
     if (!annyang) {
-      addToOutput("Note: Advanced speech recognition features not available in this browser", "system");
+      addToOutput("Note: For best results use Chrome/Firefox", "system");
     }
   </script>
 </body>
