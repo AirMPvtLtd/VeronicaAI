@@ -188,6 +188,12 @@
       - कोडिंग/तकनीकी प्रश्नों के लिए स्पष्टीकरण और कोड दोनों दें`
     };
 
+    // Emergency stop commands (works in both languages)
+    const stopCommands = {
+      'en-US': ['stop', 'wait', 'mute', 'shut up', 'quiet'],
+      'hi-IN': ['रुको', 'बंद करो', 'चुप रहो', 'ठहरो', 'रुक जाओ']
+    };
+
     function addToOutput(text, type = "system", target = "main") {
       const timestamp = new Date().toLocaleTimeString();
       const prefix = type === "user" ? "🗣 You" : 
@@ -206,11 +212,15 @@
     }
 
     function extractTechContent(text) {
-      // Extract code blocks and technical explanations
       const codeBlocks = text.match(/```[\s\S]*?```/g) || [];
       const techExplanation = text.replace(/```[\s\S]*?```/g, '')
                                  .replace(/(?:https?|ftp):\/\/[\n\S]+/g, '');
       return { codeBlocks, techExplanation };
+    }
+
+    function shouldStopSpeech(text) {
+      const lowerText = text.toLowerCase();
+      return stopCommands[currentLanguage].some(cmd => lowerText.includes(cmd));
     }
 
     function speakText(text, lang) {
@@ -277,6 +287,15 @@
       
       annyang.addCommands({
         '*text': function(text) {
+          // Check for stop commands first
+          if (shouldStopSpeech(text)) {
+            responsiveVoice.cancel();
+            isSpeaking = false;
+            addToOutput("Command acknowledged. I've stopped speaking.", "ai");
+            startVoiceRecognition();
+            return;
+          }
+          
           if (isSpeaking) {
             responsiveVoice.cancel();
             isSpeaking = false;
@@ -393,6 +412,7 @@
         stopVoiceRecognition();
         currentLanguage = languageSelector.value;
         responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "UK English Male");
+        initializeSpeechRecognition();
         if (!isSpeaking) startVoiceRecognition();
       }
     });
