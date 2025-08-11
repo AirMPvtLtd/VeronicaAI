@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Veronica AI - Advanced Assistant</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/annyang/2.6.1/annyang.min.js"></script>
   <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
@@ -190,8 +190,8 @@
 
     // Emergency stop commands (works in both languages)
     const stopCommands = {
-      'en-US': ['stop', 'wait', 'mute', 'shut up', 'quiet'],
-      'hi-IN': ['रुको', 'बंद करो', 'चुप रहो', 'ठहरो', 'रुक जाओ']
+      'en-US': ['stop', 'wait', 'mute', 'shut up', 'quiet', 'veronica stop'],
+      'hi-IN': ['रुको', 'बंद करो', 'चुप रहो', 'ठहरो', 'रुक जाओ', 'वेरोनिका रुको']
     };
 
     function addToOutput(text, type = "system", target = "main") {
@@ -220,11 +220,14 @@
 
     function shouldStopSpeech(text) {
       const lowerText = text.toLowerCase();
-      return stopCommands[currentLanguage].some(cmd => lowerText.includes(cmd));
+      return stopCommands[currentLanguage].some(cmd => lowerText.includes(cmd.toLowerCase()));
     }
 
     function speakText(text, lang) {
-      if (isSpeaking) responsiveVoice.cancel();
+      if (isSpeaking) {
+        responsiveVoice.cancel();
+        isSpeaking = false;
+      }
       
       isSpeaking = true;
       const cleanedText = cleanResponse(text);
@@ -239,7 +242,7 @@
           onend: () => {
             isSpeaking = false;
             noiseIndicator.classList.remove("noise-active");
-            if (running) startVoiceRecognition();
+            if (running) setTimeout(startVoiceRecognition, 500);
           }
         });
       } else {
@@ -252,7 +255,7 @@
           onend: () => {
             isSpeaking = false;
             noiseIndicator.classList.remove("noise-active");
-            if (running) startVoiceRecognition();
+            if (running) setTimeout(startVoiceRecognition, 500);
           }
         });
       }
@@ -266,7 +269,7 @@
       
       if (annyang) {
         annyang.abort();
-        annyang.start({ autoRestart: false });
+        annyang.start({ autoRestart: true });
       }
     }
 
@@ -287,6 +290,8 @@
       
       annyang.addCommands({
         '*text': function(text) {
+          console.log("Recognized:", text);
+          
           // Check for stop commands first
           if (shouldStopSpeech(text)) {
             responsiveVoice.cancel();
@@ -300,6 +305,7 @@
             responsiveVoice.cancel();
             isSpeaking = false;
           }
+          
           processUserInput(text);
         }
       });
@@ -420,10 +426,12 @@
     // Initialize
     stopBtn.disabled = true;
 
-    // Check for support
-    if (!annyang) {
-      addToOutput("Note: For best results use Chrome/Firefox", "system");
-    }
+    // Load voices when page loads
+    window.addEventListener('load', function() {
+      responsiveVoice.OnVoiceReady = function() {
+        console.log("Voices loaded");
+      };
+    });
   </script>
 </body>
 </html>
