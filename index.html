@@ -4,7 +4,13 @@
   <meta charset="UTF-8">
   <title>Veronica AI - Advanced Assistant</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/annyang/2.6.1/annyang.min.js"></script>
-  <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
+  <script src="https://code.responsivevoice.org/responsivevoice.js?key=YOUR_RESPONSIVEVOICE_API_KEY"></script>
+  <script>
+    // Fallback for responsivevoice.js
+    if (!window.responsiveVoice) {
+      console.warn("ResponsiveVoice not loaded. Falling back to Web Speech API.");
+    }
+  </script>
   <style>
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
@@ -43,6 +49,7 @@
       cursor: pointer;
       transition: all 0.3s;
       font-weight: bold;
+      touch-action: manipulation;
     }
     #startBtn { 
       background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
@@ -152,7 +159,6 @@
   </div>
 
   <script>
-    const API_KEY = "x4FTLzA5S3mjqJX42QYspPDuOfrLGpTJ";
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
     const responseBox = document.getElementById("responseBox");
@@ -168,8 +174,8 @@
     let isSpeaking = false;
     let audioStream;
     let abortController = new AbortController();
+    let recognitionTimeout;
 
-    // System prompts
     const systemPrompt = {
       "en-US": `You are ${assistantName}, an advanced AI assistant for ${userName}. Respond with:
       - Technical precision like JARVIS from Iron Man
@@ -188,10 +194,9 @@
       - कोडिंग/तकनीकी प्रश्नों के लिए स्पष्टीकरण और कोड दोनों दें`
     };
 
-    // Emergency stop commands (works in both languages)
     const stopCommands = {
-      'en-US': ['stop', 'wait', 'mute', 'shut up', 'quiet', 'veronica stop'],
-      'hi-IN': ['रुको', 'बंद करो', 'चुप रहो', 'ठहरो', 'रुक जाओ', 'वेरोनिका रुको']
+      "en-US": ["stop", "wait", "mute", "shut up", "quiet", "veronica stop"],
+      "hi-IN": ["रुको", "बंद करो", "चुप रहो", "ठहरो", "रुक जाओ", "वेरोनिका रुको"]
     };
 
     function addToOutput(text, type = "system", target = "main") {
@@ -201,20 +206,28 @@
                     type === "tech" ? "⚙️ Tech" : "> System";
       
       const targetBox = target === "tech" ? techBox : responseBox;
-      targetBox.innerHTML += `\n\n[${timestamp}] ${prefix}: <span class="${type}-text">${text}</span>`;
+      const messageDiv = document.createElement("div");
+      const prefixSpan = document.createElement("span");
+      prefixSpan.textContent = `[${timestamp}] ${prefix}: `;
+      const contentSpan = document.createElement("span");
+      contentSpan.className = `${type}-text`;
+      contentSpan.textContent = text;
+      messageDiv.appendChild(prefixSpan);
+      messageDiv.appendChild(contentSpan);
+      targetBox.appendChild(messageDiv);
       targetBox.scrollTop = targetBox.scrollHeight;
     }
 
     function cleanResponse(text) {
-      return text.replace(/[\[\]\(\)\{\}\<\>\*\-\+\=\_\&\^\%\$\#\@\!]/g, ' ')
-                 .replace(/\s+/g, ' ')
+      return text.replace(/[\[\]\(\)\{\}\<\>\*\-\+\=\_\&\^\%\$\#\@\!]/g, " ")
+                 .replace(/\s+/g, " ")
                  .trim();
     }
 
     function extractTechContent(text) {
       const codeBlocks = text.match(/```[\s\S]*?```/g) || [];
-      const techExplanation = text.replace(/```[\s\S]*?```/g, '')
-                                 .replace(/(?:https?|ftp):\/\/[\n\S]+/g, '');
+      const techExplanation = text.replace(/```[\s\S]*?```/g, "")
+                                 .replace(/(?:https?|ftp):\/\/[\n\S]+/g, "");
       return { codeBlocks, techExplanation };
     }
 
@@ -225,15 +238,17 @@
 
     function speakText(text, lang) {
       if (isSpeaking) {
-        responsiveVoice.cancel();
+        if (window.responsiveVoice) responsiveVoice.cancel();
+        else window.speechSynthesis.cancel();
         isSpeaking = false;
       }
       
       isSpeaking = true;
       const cleanedText = cleanResponse(text);
       
-      if (lang === "hi-IN") {
-        responsiveVoice.speak(cleanedText, "Hindi Male", {
+      if (window.responsiveVoice) {
+        const voice = lang === "hi-IN" ? "Hindi Male" : "UK English Male";
+        responsiveVoice.speak(cleanedText, voice, {
           rate: 0.95,
           pitch: 1.0,
           onstart: () => {
@@ -246,18 +261,20 @@
           }
         });
       } else {
-        responsiveVoice.speak(cleanedText, "UK English Male", {
-          rate: 0.95,
-          pitch: 1.0,
-          onstart: () => {
-            noiseIndicator.classList.add("noise-active");
-          },
-          onend: () => {
-            isSpeaking = false;
-            noiseIndicator.classList.remove("noise-active");
-            if (running) setTimeout(startVoiceRecognition, 500);
-          }
-        });
+        // Fallback to Web Speech API
+        const utterance = new SpeechSynthesisUtterance(cleanedText);
+        utterance.lang = lang === "hi-IN" ? "hi-IN" : "en-GB";
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        utterance.onstart = () => {
+          noiseIndicator.classList.add("noise-active");
+        };
+        utterance.onend = () => {
+          isSpeaking = false;
+          noiseIndicator.classList.remove("noise-active");
+          if (running) setTimeout(startVoiceRecognition, 500);
+        };
+        window.speechSynthesis.speak(utterance);
       }
     }
 
@@ -269,7 +286,13 @@
       
       if (annyang) {
         annyang.abort();
-        annyang.start({ autoRestart: true });
+        annyang.start({ autoRestart: false });
+        clearTimeout(recognitionTimeout);
+        recognitionTimeout = setTimeout(() => {
+          if (running && !isSpeaking) startVoiceRecognition();
+        }, 5000);
+      } else {
+        addToOutput("Speech recognition unavailable. Please check browser permissions.", "system");
       }
     }
 
@@ -278,23 +301,25 @@
       statusIndicator.classList.remove("active");
       noiseIndicator.classList.remove("noise-active");
       if (annyang) annyang.abort();
+      clearTimeout(recognitionTimeout);
     }
 
     function initializeSpeechRecognition() {
       if (!annyang) {
-        addToOutput("Advanced speech recognition unavailable", "system");
+        addToOutput("Speech recognition unavailable. Please check browser permissions.", "system");
         return;
       }
 
       currentLanguage = languageSelector.value;
+      annyang.setLanguage(currentLanguage === "hi-IN" ? "hi-IN" : "en-US");
       
       annyang.addCommands({
-        '*text': function(text) {
+        "*text": function(text) {
           console.log("Recognized:", text);
           
-          // Check for stop commands first
           if (shouldStopSpeech(text)) {
-            responsiveVoice.cancel();
+            if (window.responsiveVoice) responsiveVoice.cancel();
+            else window.speechSynthesis.cancel();
             isSpeaking = false;
             addToOutput("Command acknowledged. I've stopped speaking.", "ai");
             startVoiceRecognition();
@@ -302,7 +327,8 @@
           }
           
           if (isSpeaking) {
-            responsiveVoice.cancel();
+            if (window.responsiveVoice) responsiveVoice.cancel();
+            else window.speechSynthesis.cancel();
             isSpeaking = false;
           }
           
@@ -310,12 +336,12 @@
         }
       });
 
-      annyang.addCallback('error', function(err) {
+      annyang.addCallback("error", function(err) {
         console.error("Speech error:", err);
         if (running && !isSpeaking) setTimeout(startVoiceRecognition, 1000);
       });
 
-      annyang.addCallback('end', function() {
+      annyang.addCallback("end", function() {
         if (running && !isSpeaking) setTimeout(startVoiceRecognition, 500);
       });
     }
@@ -330,22 +356,20 @@
         
         const response = await getAIResponse(text, abortController.signal);
         
-        // Process main response
-        const mainResponse = response.replace(/```[\s\S]*?```/g, '');
+        const mainResponse = response.replace(/```[\s\S]*?```/g, "");
         addToOutput(mainResponse, "ai");
         speakText(mainResponse, currentLanguage);
         
-        // Process technical content
         const { codeBlocks, techExplanation } = extractTechContent(response);
         if (techExplanation.trim().length > 0) {
           addToOutput(techExplanation, "tech", "tech");
         }
         codeBlocks.forEach(code => {
-          addToOutput(`<div class="code-block">${code.replace(/```/g, '')}</div>`, "tech", "tech");
+          addToOutput(code.replace(/```/g, ""), "tech", "tech");
         });
         
       } catch (err) {
-        if (err.name !== 'AbortError') {
+        if (err.name !== "AbortError") {
           console.error("API error:", err);
           addToOutput(`System error: ${err.message}`, "system");
           if (running && !isSpeaking) startVoiceRecognition();
@@ -354,11 +378,13 @@
     }
 
     async function getAIResponse(userInput, signal) {
-      const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      // Placeholder: API call should be handled server-side
+      // Example server-side endpoint: "/api/chat"
+      /*
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${API_KEY}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           model: "mistral-large-latest",
@@ -371,11 +397,20 @@
         signal
       });
 
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
       const data = await response.json();
+      if (!data.choices || !data.choices[0]?.message?.content) {
+        throw new Error("Invalid API response format");
+      }
       return data.choices[0].message.content;
+      */
+      // Temporary mock response
+      return "Mock response: API call should be implemented server-side.";
     }
 
-    // Start Veronica
     startBtn.addEventListener("click", async () => {
       try {
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -388,7 +423,9 @@
         initializeSpeechRecognition();
         startVoiceRecognition();
         
-        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "UK English Male");
+        if (window.responsiveVoice) {
+          responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "UK English Male");
+        }
         
       } catch (err) {
         console.error("Activation error:", err);
@@ -396,12 +433,12 @@
       }
     });
 
-    // Stop Veronica
     stopBtn.addEventListener("click", () => {
       running = false;
       isSpeaking = false;
       stopVoiceRecognition();
-      responsiveVoice.cancel();
+      if (window.responsiveVoice) responsiveVoice.cancel();
+      else window.speechSynthesis.cancel();
       startBtn.disabled = false;
       stopBtn.disabled = true;
       addToOutput("Systems shutting down.", "system");
@@ -411,26 +448,40 @@
       }
     });
 
-    // Language change handler
+    startBtn.addEventListener("touchstart", async (e) => {
+      e.preventDefault();
+      startBtn.click();
+    });
+
+    stopBtn.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      stopBtn.click();
+    });
+
     languageSelector.addEventListener("change", () => {
       if (running) {
         addToOutput(`Language set to ${languageSelector.value === "hi-IN" ? "Hindi" : "English"}`, "system");
         stopVoiceRecognition();
         currentLanguage = languageSelector.value;
-        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "UK English Male");
+        if (window.responsiveVoice) {
+          responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "UK English Male");
+        }
         initializeSpeechRecognition();
         if (!isSpeaking) startVoiceRecognition();
       }
     });
 
-    // Initialize
     stopBtn.disabled = true;
 
-    // Load voices when page loads
-    window.addEventListener('load', function() {
-      responsiveVoice.OnVoiceReady = function() {
-        console.log("Voices loaded");
-      };
+    window.addEventListener("load", function() {
+      if (window.responsiveVoice && responsiveVoice.OnVoiceReady) {
+        responsiveVoice.OnVoiceReady = function() {
+          console.log("Voices loaded");
+        };
+      } else {
+        console.log("Using Web Speech API as fallback");
+        addToOutput("ResponsiveVoice unavailable. Using browser speech synthesis.", "system");
+      }
     });
   </script>
 </body>
