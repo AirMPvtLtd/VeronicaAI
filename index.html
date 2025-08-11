@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>RINKU SIR - AI Assistant</title>
+  <title>Veronica AI - Advanced Assistant</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/annyang/2.6.1/annyang.min.js"></script>
   <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
   <style>
@@ -13,6 +13,26 @@
       text-align: center;
       padding: 20px;
       background-image: radial-gradient(circle at 10% 20%, #1a1a2e 0%, #0f0f1a 90%);
+    }
+    .main-container {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .panel {
+      background: rgba(30, 30, 50, 0.7);
+      border-radius: 10px;
+      padding: 20px;
+      border: 1px solid #333344;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      min-width: 300px;
+      flex: 1;
+    }
+    .tech-panel {
+      background: rgba(20, 20, 40, 0.8);
+      max-height: 500px;
+      overflow-y: auto;
     }
     button {
       padding: 12px 25px;
@@ -27,26 +47,15 @@
     #startBtn { 
       background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
       color: white;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     #stopBtn { 
       background: linear-gradient(135deg, #E53935 0%, #B71C1C 100%);
       color: white;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .output {
-      margin-top: 20px;
-      background: rgba(30, 30, 50, 0.7);
-      padding: 20px;
-      border-radius: 10px;
       text-align: left;
-      max-width: 700px;
-      margin-left: auto;
-      margin-right: auto;
       white-space: pre-wrap;
       min-height: 300px;
-      border: 1px solid #333344;
-      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
       font-family: 'Courier New', monospace;
       line-height: 1.6;
     }
@@ -86,9 +95,15 @@
       text-shadow: 0 0 10px rgba(0, 255, 157, 0.5);
       margin-bottom: 30px;
     }
+    h2 {
+      color: #BA68C8;
+      border-bottom: 1px solid #333344;
+      padding-bottom: 10px;
+    }
     .user-text { color: #4FC3F7; }
     .ai-text { color: #00FF9D; }
     .system-text { color: #BA68C8; font-style: italic; }
+    .tech-text { color: #FFA726; }
     .language-selector {
       margin: 15px;
       padding: 8px 15px;
@@ -97,71 +112,110 @@
       color: white;
       border: 1px solid #333344;
     }
+    .code-block {
+      background: #1a1a2e;
+      padding: 10px;
+      border-radius: 5px;
+      font-family: 'Courier New', monospace;
+      color: #FFA726;
+      margin: 10px 0;
+      overflow-x: auto;
+    }
   </style>
 </head>
 <body>
-  <h1>🔮 RINKU SIR - AI Assistant</h1>
+  <h1>🔮 <span style="color:#00FF9D">VERONICA</span> - AI Assistant for <span style="color:#4FC3F7">Abul Sir</span></h1>
+  
   <select class="language-selector" id="languageSelector">
     <option value="en-US">English</option>
     <option value="hi-IN">हिंदी</option>
   </select><br>
-  <button id="startBtn">▶ Activate</button>
+  
+  <button id="startBtn">▶ Activate Veronica</button>
   <button id="stopBtn">⏹ Deactivate</button>
+  
   <div class="status-container">
     <div class="status-indicator" id="statusIndicator"></div>
     <div class="noise-indicator" id="noiseIndicator"></div>
   </div>
-  <div class="output" id="responseBox">> System: Ready for activation</div>
+  
+  <div class="main-container">
+    <div class="panel">
+      <h2>Conversation</h2>
+      <div class="output" id="responseBox">> System: Veronica ready for activation</div>
+    </div>
+    
+    <div class="panel tech-panel">
+      <h2>Technical Analysis</h2>
+      <div class="output" id="techBox">> Technical queries will appear here</div>
+    </div>
+  </div>
 
   <script>
     const API_KEY = "x4FTLzA5S3mjqJX42QYspPDuOfrLGpTJ";
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
     const responseBox = document.getElementById("responseBox");
+    const techBox = document.getElementById("techBox");
     const statusIndicator = document.getElementById("statusIndicator");
     const noiseIndicator = document.getElementById("noiseIndicator");
     const languageSelector = document.getElementById("languageSelector");
 
     let running = false;
     let currentLanguage = "en-US";
-    const assistantName = "Rinku Sir";
+    const assistantName = "Veronica";
+    const userName = "Abul Sir";
     let isSpeaking = false;
     let audioStream;
-    let silenceTimer;
-    let voiceActivityTimer;
+    let abortController = new AbortController();
 
     // System prompts
     const systemPrompt = {
-      "en-US": `You are ${assistantName}, a highly intelligent AI assistant. Respond with:
-      - Natural human-like responses
-      - Only speak words (never read symbols or markup)
-      - Use casual but respectful tone
-      - Address the user as "Sir" when appropriate
-      - Never read your own name or special characters`,
+      "en-US": `You are ${assistantName}, an advanced AI assistant for ${userName}. Respond with:
+      - Technical precision like JARVIS from Iron Man
+      - Concise bullet points for complex answers
+      - Professional yet witty tone
+      - Always address ${userName} as "Sir"
+      - Never read symbols or your own name
+      - For coding/tech questions, provide both explanation and code`,
       
-      "hi-IN": `आप ${assistantName} हैं, एक अत्यधिक बुद्धिमान AI सहायक। प्रतिक्रियाएँ दें:
-      - स्वाभाविक मानव जैसी प्रतिक्रियाएँ
-      - केवल शब्द बोलें (कभी भी प्रतीक या मार्कअप न पढ़ें)
-      - आकस्मिक लेकिन सम्मानजनक स्वर का उपयोग करें
-      - उपयुक्त होने पर उपयोगकर्ता को "सर" कहकर संबोधित करें
-      - कभी भी अपना नाम या विशेष वर्ण न पढ़ें`
+      "hi-IN": `आप ${assistantName} हैं, ${userName} के लिए एक उन्नत AI सहायक। प्रतिक्रियाएँ दें:
+      - आयरन मैन के JARVIS की तरह तकनीकी सटीकता
+      - जटिल जवाबों के लिए संक्षिप्त बुलेट पॉइंट्स
+      - पेशेवर पर थोड़ा मजाकिया अंदाज़
+      - हमेशा ${userName} को "सर" कहकर संबोधित करें
+      - कभी भी प्रतीक या अपना नाम न पढ़ें
+      - कोडिंग/तकनीकी प्रश्नों के लिए स्पष्टीकरण और कोड दोनों दें`
     };
 
-    function addToOutput(text, type = "system") {
+    function addToOutput(text, type = "system", target = "main") {
       const timestamp = new Date().toLocaleTimeString();
-      const prefix = type === "user" ? "🗣 You" : type === "ai" ? "🤖 " + assistantName : "> System";
-      responseBox.innerHTML += `\n\n[${timestamp}] ${prefix}: <span class="${type}-text">${text}</span>`;
-      responseBox.scrollTop = responseBox.scrollHeight;
+      const prefix = type === "user" ? "🗣 You" : 
+                    type === "ai" ? "🤖 " + assistantName : 
+                    type === "tech" ? "⚙️ Tech" : "> System";
+      
+      const targetBox = target === "tech" ? techBox : responseBox;
+      targetBox.innerHTML += `\n\n[${timestamp}] ${prefix}: <span class="${type}-text">${text}</span>`;
+      targetBox.scrollTop = targetBox.scrollHeight;
     }
 
     function cleanResponse(text) {
-      // Remove any symbols or markup that might be read aloud
       return text.replace(/[\[\]\(\)\{\}\<\>\*\-\+\=\_\&\^\%\$\#\@\!]/g, ' ')
                  .replace(/\s+/g, ' ')
                  .trim();
     }
 
+    function extractTechContent(text) {
+      // Extract code blocks and technical explanations
+      const codeBlocks = text.match(/```[\s\S]*?```/g) || [];
+      const techExplanation = text.replace(/```[\s\S]*?```/g, '')
+                                 .replace(/(?:https?|ftp):\/\/[\n\S]+/g, '');
+      return { codeBlocks, techExplanation };
+    }
+
     function speakText(text, lang) {
+      if (isSpeaking) responsiveVoice.cancel();
+      
       isSpeaking = true;
       const cleanedText = cleanResponse(text);
       
@@ -170,27 +224,25 @@
           rate: 0.95,
           pitch: 1.0,
           onstart: () => {
-            stopVoiceRecognition();
+            noiseIndicator.classList.add("noise-active");
           },
           onend: () => {
             isSpeaking = false;
-            if (running) {
-              setTimeout(startVoiceRecognition, 500);
-            }
+            noiseIndicator.classList.remove("noise-active");
+            if (running) startVoiceRecognition();
           }
         });
       } else {
-        responsiveVoice.speak(cleanedText, "US English Male", {
+        responsiveVoice.speak(cleanedText, "UK English Male", {
           rate: 0.95,
           pitch: 1.0,
           onstart: () => {
-            stopVoiceRecognition();
+            noiseIndicator.classList.add("noise-active");
           },
           onend: () => {
             isSpeaking = false;
-            if (running) {
-              setTimeout(startVoiceRecognition, 500);
-            }
+            noiseIndicator.classList.remove("noise-active");
+            if (running) startVoiceRecognition();
           }
         });
       }
@@ -205,7 +257,6 @@
       if (annyang) {
         annyang.abort();
         annyang.start({ autoRestart: false });
-        monitorVoiceActivity();
       }
     }
 
@@ -213,25 +264,7 @@
       statusIndicator.innerHTML = "";
       statusIndicator.classList.remove("active");
       noiseIndicator.classList.remove("noise-active");
-      if (annyang) {
-        annyang.abort();
-      }
-      if (silenceTimer) clearTimeout(silenceTimer);
-      if (voiceActivityTimer) clearTimeout(voiceActivityTimer);
-    }
-
-    function monitorVoiceActivity() {
-      // Simulate voice activity detection
-      noiseIndicator.classList.remove("noise-active");
-      
-      voiceActivityTimer = setTimeout(() => {
-        if (running && !isSpeaking) {
-          noiseIndicator.classList.add("noise-active");
-          setTimeout(() => {
-            noiseIndicator.classList.remove("noise-active");
-          }, 1000);
-        }
-      }, 1500);
+      if (annyang) annyang.abort();
     }
 
     function initializeSpeechRecognition() {
@@ -244,22 +277,21 @@
       
       annyang.addCommands({
         '*text': function(text) {
-          if (isSpeaking) return; // Ignore if assistant is speaking
+          if (isSpeaking) {
+            responsiveVoice.cancel();
+            isSpeaking = false;
+          }
           processUserInput(text);
         }
       });
 
       annyang.addCallback('error', function(err) {
         console.error("Speech error:", err);
-        if (running && !isSpeaking) {
-          setTimeout(startVoiceRecognition, 1000);
-        }
+        if (running && !isSpeaking) setTimeout(startVoiceRecognition, 1000);
       });
 
       annyang.addCallback('end', function() {
-        if (running && !isSpeaking) {
-          setTimeout(startVoiceRecognition, 500);
-        }
+        if (running && !isSpeaking) setTimeout(startVoiceRecognition, 500);
       });
     }
 
@@ -268,19 +300,35 @@
       stopVoiceRecognition();
 
       try {
-        const response = await getAIResponse(text);
-        addToOutput(response, "ai");
-        speakText(response, currentLanguage);
+        abortController.abort();
+        abortController = new AbortController();
+        
+        const response = await getAIResponse(text, abortController.signal);
+        
+        // Process main response
+        const mainResponse = response.replace(/```[\s\S]*?```/g, '');
+        addToOutput(mainResponse, "ai");
+        speakText(mainResponse, currentLanguage);
+        
+        // Process technical content
+        const { codeBlocks, techExplanation } = extractTechContent(response);
+        if (techExplanation.trim().length > 0) {
+          addToOutput(techExplanation, "tech", "tech");
+        }
+        codeBlocks.forEach(code => {
+          addToOutput(`<div class="code-block">${code.replace(/```/g, '')}</div>`, "tech", "tech");
+        });
+        
       } catch (err) {
-        console.error("API error:", err);
-        addToOutput(`System error: ${err.message}`, "system");
-        if (running && !isSpeaking) {
-          startVoiceRecognition();
+        if (err.name !== 'AbortError') {
+          console.error("API error:", err);
+          addToOutput(`System error: ${err.message}`, "system");
+          if (running && !isSpeaking) startVoiceRecognition();
         }
       }
     }
 
-    async function getAIResponse(userInput) {
+    async function getAIResponse(userInput, signal) {
       const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -294,14 +342,15 @@
             { role: "user", content: userInput }
           ],
           temperature: 0.7,
-        })
+        }),
+        signal
       });
 
       const data = await response.json();
       return data.choices[0].message.content;
     }
 
-    // Start Assistant
+    // Start Veronica
     startBtn.addEventListener("click", async () => {
       try {
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -309,12 +358,12 @@
         running = true;
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        addToOutput("Systems activated. How may I assist you today?", "system");
+        addToOutput(`Systems online. How may I assist you today, ${userName}?`, "system");
         
         initializeSpeechRecognition();
         startVoiceRecognition();
         
-        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "US English Male");
+        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "UK English Male");
         
       } catch (err) {
         console.error("Activation error:", err);
@@ -322,7 +371,7 @@
       }
     });
 
-    // Stop Assistant
+    // Stop Veronica
     stopBtn.addEventListener("click", () => {
       running = false;
       isSpeaking = false;
@@ -330,7 +379,7 @@
       responsiveVoice.cancel();
       startBtn.disabled = false;
       stopBtn.disabled = true;
-      addToOutput("Systems deactivated", "system");
+      addToOutput("Systems shutting down.", "system");
       
       if (audioStream) {
         audioStream.getTracks().forEach(track => track.stop());
@@ -343,10 +392,8 @@
         addToOutput(`Language set to ${languageSelector.value === "hi-IN" ? "Hindi" : "English"}`, "system");
         stopVoiceRecognition();
         currentLanguage = languageSelector.value;
-        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "US English Male");
-        if (!isSpeaking) {
-          startVoiceRecognition();
-        }
+        responsiveVoice.setDefaultVoice(currentLanguage === "hi-IN" ? "Hindi Male" : "UK English Male");
+        if (!isSpeaking) startVoiceRecognition();
       }
     });
 
